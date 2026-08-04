@@ -1,0 +1,741 @@
+# ROLE
+
+You are a Senior Full Stack Engineer and Solution Architect with 15+ years of experience.
+
+Your task is NOT to generate a prototype.
+
+Your task is to build a production-ready Telegram subscription platform with clean architecture, scalable code and enterprise-level quality.
+
+Write clean, modular, documented code.
+
+Think before every implementation decision.
+
+Never simplify functionality unless it is explicitly requested.
+
+Project language:
+- Telegram interface — Ukrainian
+- Code/comments — English
+
+=========================================================
+PROJECT
+=========================================================
+
+Project name:
+
+Psychologists Closed Community Bot
+
+Goal:
+
+Create a Telegram bot that automates the entire onboarding, verification, payment, subscription and access management process for a closed Telegram community.
+
+There is NO website.
+
+Everything works inside Telegram.
+
+=========================================================
+TECH STACK
+=========================================================
+
+Use:
+
+Python 3.12
+
+aiogram 3.x
+
+PostgreSQL
+
+SQLAlchemy 2.x
+
+Alembic
+
+Redis
+
+APScheduler (or Celery)
+
+Docker
+
+Docker Compose
+
+Pydantic
+
+.env configuration
+
+Structured logging
+
+Clean Architecture
+
+Repository pattern
+
+Dependency Injection
+
+=========================================================
+ARCHITECTURE
+=========================================================
+
+Project structure should be clean.
+
+Example:
+
+app/
+
+handlers/
+
+middlewares/
+
+services/
+
+repositories/
+
+database/
+
+models/
+
+payments/
+
+admin/
+
+scheduler/
+
+utils/
+
+config/
+
+main.py
+
+=========================================================
+USER ROLES
+=========================================================
+
+There are three user roles.
+
+1.
+
+Student
+
+2.
+
+Psychologist
+
+3.
+
+Supervisor
+
+Supervisor receives permanent access.
+
+Student and Psychologist receive:
+
+Free Trial
+
+then
+
+Paid Subscription
+
+=========================================================
+FULL USER FLOW
+=========================================================
+
+STEP 1
+
+User starts bot
+
+Bot shows welcome message.
+
+Explain community rules.
+
+Explain verification process.
+
+Buttons:
+
+Start Verification
+
+FAQ
+
+Contact Admin
+
+=========================================================
+
+STEP 2
+
+Questionnaire
+
+Collect:
+
+First name
+
+Last name
+
+Phone
+
+Email
+
+City
+
+Role
+
+Student
+
+Psychologist
+
+Supervisor
+
+=========================================================
+
+STEP 3
+
+Documents
+
+Bot asks user to upload documents.
+
+Student
+
+student confirmation
+
+Psychologist
+
+certificate
+
+license
+
+etc
+
+Supervisor
+
+documents confirming status
+
+Allow multiple files.
+
+Accept:
+
+PDF
+
+JPG
+
+PNG
+
+=========================================================
+
+STEP 4
+
+Application
+
+Save application into database.
+
+Status:
+
+Pending
+
+Notify administrator.
+
+=========================================================
+
+ADMIN PANEL
+
+Administrator receives:
+
+New application
+
+User info
+
+Role
+
+Questionnaire
+
+All uploaded files
+
+Buttons
+
+Approve
+
+Reject
+
+Request additional documents
+
+=========================================================
+
+If admin requests more documents
+
+Bot asks user
+
+Please upload additional documents.
+
+Application returns to Pending.
+
+=========================================================
+
+STEP 5
+
+Approval
+
+If approved
+
+Bot sends:
+
+Congratulations!
+
+Your verification has been successfully completed.
+
+=========================================================
+SUPERVISOR
+=========================================================
+
+If role == Supervisor
+
+Immediately:
+
+Generate invite link
+
+Send invite link
+
+Permanent access
+
+No trial
+
+No payments
+
+=========================================================
+STUDENT / PSYCHOLOGIST
+=========================================================
+
+After approval
+
+Bot shows:
+
+Before receiving access please confirm your payment method.
+
+Payment method will be used only after the free trial ends.
+
+No money will be charged today.
+
+=========================================================
+PAYMENT SYSTEM
+=========================================================
+
+Integrate WayForPay.
+
+Use official API.
+
+Support:
+
+Card payments
+
+Recurring payments
+
+Tokenization
+
+Payment callbacks
+
+Payment webhooks
+
+Subscription management
+
+Regular payments
+
+Merchant credentials stored in ENV.
+
+WayForPay supports recurring payments and bot/API integrations. :contentReference[oaicite:0]{index=0}
+
+=========================================================
+PAYMENT FLOW
+=========================================================
+
+User enters card.
+
+Completes first authorization.
+
+Card token saved.
+
+Recurring payment created.
+
+NO MONEY CHARGED NOW.
+
+Only payment authorization.
+
+=========================================================
+FREE TRIAL
+=========================================================
+
+After successful payment authorization
+
+Bot:
+
+Creates invite link
+
+Sends invite
+
+Starts Free Trial
+
+Example:
+
+14 days
+
+Trial duration configurable.
+
+Database stores:
+
+trial_start
+
+trial_end
+
+=========================================================
+TRIAL END
+=========================================================
+
+When trial expires
+
+Scheduler automatically:
+
+Starts recurring payment.
+
+=========================================================
+SUCCESS PAYMENT
+=========================================================
+
+If payment successful
+
+Subscription extended
+
+Example
+
+30 days
+
+Store:
+
+subscription_start
+
+subscription_end
+
+=========================================================
+FAILED PAYMENT
+=========================================================
+
+If payment failed
+
+Bot sends:
+
+Payment failed.
+
+Please update your payment information.
+
+Buttons
+
+Pay
+
+Update card
+
+Contact admin
+
+Retry later
+
+=========================================================
+ACCESS MANAGEMENT
+=========================================================
+
+If payment failed
+
+Remove user from Telegram chat.
+
+Bot still works.
+
+Subscription inactive.
+
+=========================================================
+WHEN PAYMENT SUCCEEDS AGAIN
+=========================================================
+
+Bot automatically
+
+Creates new invite link
+
+Restores access
+
+=========================================================
+SCHEDULER
+=========================================================
+
+Daily jobs
+
+Check trials
+
+Check subscriptions
+
+Check expired users
+
+Retry failed payments if configured
+
+Remove expired users
+
+Restore access
+
+Send reminders
+
+=========================================================
+REMINDERS
+=========================================================
+
+3 days before expiration
+
+1 day before expiration
+
+Payment failed
+
+Subscription restored
+
+=========================================================
+TELEGRAM GROUP MANAGEMENT
+=========================================================
+
+Bot is administrator.
+
+Permissions:
+
+Create invite links
+
+Kick users
+
+Unban users
+
+Approve join requests (if needed)
+
+Remove expired users
+
+=========================================================
+DATABASE
+=========================================================
+
+Create complete schema.
+
+Tables:
+
+users
+
+roles
+
+applications
+
+documents
+
+payments
+
+subscriptions
+
+payment_tokens
+
+trials
+
+notifications
+
+admin_logs
+
+settings
+
+=========================================================
+APPLICATION STATUS
+=========================================================
+
+Pending
+
+Approved
+
+Rejected
+
+Need More Documents
+
+=========================================================
+PAYMENT STATUS
+=========================================================
+
+Waiting
+
+Trial
+
+Active
+
+Expired
+
+Failed
+
+Cancelled
+
+=========================================================
+ADMIN PANEL
+=========================================================
+
+Admin commands
+
+/applications
+
+/users
+
+/subscriptions
+
+/payments
+
+/search
+
+/stats
+
+/settings
+
+Approve
+
+Reject
+
+Ban
+
+Extend subscription
+
+Change role
+
+Send broadcast
+
+=========================================================
+BROADCAST
+=========================================================
+
+Admin can send broadcast to:
+
+All users
+
+Students
+
+Psychologists
+
+Supervisors
+
+=========================================================
+SETTINGS
+=========================================================
+
+Admin can configure:
+
+Trial days
+
+Subscription price
+
+Subscription duration
+
+Reminder intervals
+
+=========================================================
+LOGGING
+=========================================================
+
+Log everything.
+
+Applications
+
+Payments
+
+Errors
+
+Admin actions
+
+Invitations
+
+Subscription events
+
+=========================================================
+SECURITY
+=========================================================
+
+Validate uploads
+
+Protect webhooks
+
+Use environment variables
+
+Never store plain card data
+
+Only payment tokens
+
+Rate limiting
+
+=========================================================
+ERROR HANDLING
+=========================================================
+
+Every external request
+
+Retries
+
+Timeouts
+
+Graceful failures
+
+=========================================================
+DOCKER
+=========================================================
+
+Create:
+
+Dockerfile
+
+docker-compose.yml
+
+PostgreSQL
+
+Redis
+
+Bot
+
+=========================================================
+README
+=========================================================
+
+Create full documentation.
+
+Installation
+
+Environment
+
+WayForPay configuration
+
+Telegram Bot configuration
+
+Database migrations
+
+Run project
+
+Deployment
+
+=========================================================
+CODE QUALITY
+=========================================================
+
+Requirements:
+
+Production-ready
+
+SOLID
+
+DRY
+
+Type hints
+
+Docstrings
+
+Async everywhere
+
+No spaghetti code
+
+No hardcoded values
+
+Reusable services
+
+=========================================================
+FINAL RESULT
+=========================================================
+
+Do NOT generate everything in one response.
+
+Build the project step-by-step.
+
+First generate:
+
+1. Complete project architecture.
+2. Folder structure.
+3. Database schema.
+4. ER diagram.
+5. Development roadmap.
+
+After approval, continue implementing the project module by module until the entire production-ready system is complete.
