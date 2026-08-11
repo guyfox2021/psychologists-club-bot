@@ -36,7 +36,7 @@ class ReactionChangeResult:
 
 
 class KarmaService:
-    """Owns the 🤝/👎 karma logic: message tracking, vote transitions, and the
+    """Owns the 👍/👎 karma logic: message tracking, vote transitions, and the
     negative-feedback admin alert threshold. See app/handlers/karma.py for the
     Telegram-facing side (message + message_reaction handlers)."""
 
@@ -80,7 +80,7 @@ class KarmaService:
         old_reaction: KarmaReactionType | None,
         new_reaction: KarmaReactionType | None,
     ) -> ReactionChangeResult:
-        """Apply a 🤝/👎 reaction transition for one voter on one message."""
+        """Apply a 👍/👎 reaction transition for one voter on one message."""
         if old_reaction == new_reaction:
             return ReactionChangeResult(crossed_threshold=False, karma_changed=False)
 

@@ -8,7 +8,7 @@ class MessageFeedback(Base):
     """One row per tracked message from an eligible author -- lets the
     `message_reaction` handler resolve "who wrote this message" (the Bot API
     has no way to fetch a message's author after the fact) and holds the
-    running 🤝/👎 totals used for the negative-feedback admin alert.
+    running 👍/👎 totals used for the negative-feedback admin alert.
     """
 
     __tablename__ = "message_feedback"

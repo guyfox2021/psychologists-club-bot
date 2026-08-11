@@ -52,5 +52,5 @@ class NotificationStatus(str, enum.Enum):
 
 
 class KarmaReactionType(str, enum.Enum):
-    HELPED = "helped"  # 🤝
+    HELPED = "helped"  # 👍
     NOT_HELPED = "not_helped"  # 👎

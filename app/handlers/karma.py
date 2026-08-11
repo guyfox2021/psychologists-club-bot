@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 router = Router(name="karma")
 
-_HELPED_EMOJI = "🤝"
+_HELPED_EMOJI = "👍"
 _NOT_HELPED_EMOJI = "👎"
 _EMOJI_TO_REACTION = {
     _HELPED_EMOJI: KarmaReactionType.HELPED,
@@ -25,7 +25,7 @@ _EMOJI_TO_REACTION = {
 
 
 def _tracked_reaction(reactions: list) -> KarmaReactionType | None:
-    """Reduce a Telegram reaction list down to our one tracked 🤝/👎 reaction.
+    """Reduce a Telegram reaction list down to our one tracked 👍/👎 reaction.
 
     Any other emoji/custom/paid reaction is ignored entirely, per spec --
     the group's reaction picker is restricted to just these two anyway.
@@ -38,7 +38,7 @@ def _tracked_reaction(reactions: list) -> KarmaReactionType | None:
 
 def _describe_raw_reactions(reactions: list) -> str:
     """Human-readable dump of a raw reaction list for logging (e.g. "['👍']",
-    "['🤝']", "[]") -- lets us see exactly what emoji Telegram sent us, since
+    "['👎']", "[]") -- lets us see exactly what emoji Telegram sent us, since
     anything outside our tracked set is otherwise silently ignored."""
     described = []
     for reaction in reactions:
@@ -114,7 +114,7 @@ async def on_message_reaction(
     new_reaction = _tracked_reaction(event.new_reaction)
     if old_reaction == new_reaction:
         logger.info(
-            "message_reaction: ignored, no change in the tracked 🤝/👎 reaction "
+            "message_reaction: ignored, no change in the tracked 👍/👎 reaction "
             "(raw reactions were something else, or unchanged)"
         )
         return

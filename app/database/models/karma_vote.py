@@ -6,7 +6,7 @@ from app.database.models.enums import KarmaReactionType
 
 
 class KarmaVote(TimestampMixin, Base):
-    """One row per (message, voter) -- the voter's current 🤝/👎 reaction.
+    """One row per (message, voter) -- the voter's current 👍/👎 reaction.
 
     Updated in place when a reaction changes, deleted when removed, so this
     table always mirrors Telegram's own current reaction state exactly.
