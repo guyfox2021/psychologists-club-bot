@@ -81,6 +81,15 @@ class UserRepository:
         result = await self._session.execute(query)
         return list(result.scalars().all())
 
+    async def list_with_role(self) -> list[User]:
+        result = await self._session.execute(
+            select(User)
+            .options(selectinload(User.role))
+            .where(User.role_id.is_not(None))
+            .order_by(User.created_at.asc())
+        )
+        return list(result.scalars().all())
+
     async def list_recent(self, limit: int = 20, offset: int = 0) -> list[User]:
         result = await self._session.execute(
             select(User)

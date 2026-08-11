@@ -46,7 +46,7 @@ class AccessService:
         logger.info("Restored access for user %s in chat %s", telegram_id, chat_id)
         return invite_link
 
-    async def set_member_tag(self, chat_id: int, telegram_id: int, tag: str | None) -> None:
+    async def set_member_tag(self, chat_id: int, telegram_id: int, tag: str | None) -> bool:
         """Set a member's visible tag/label (Bot API 9.5+, `can_manage_tags` right).
 
         Only applies to regular (non-admin, non-creator) members -- Telegram
@@ -58,11 +58,14 @@ class AccessService:
         lag a moment behind the update it just sent us -- confirmed live, the
         very first tag attempt right after a join sometimes fails with exactly
         this error even though the user really did just join.
+
+        Returns whether the tag was actually applied, so bulk callers (e.g. a
+        tag-resync command) can report how many members were skipped.
         """
         for attempt in range(2):
             try:
                 await self._bot.set_chat_member_tag(chat_id=chat_id, user_id=telegram_id, tag=tag)
-                return
+                return True
             except TelegramBadRequest as error:
                 if "USER_NOT_PARTICIPANT" in str(error) and attempt == 0:
                     logger.info(
@@ -77,4 +80,5 @@ class AccessService:
                 logger.warning(
                     "Could not set tag for user %s in chat %s: %s", telegram_id, chat_id, error
                 )
-                return
+                return False
+        return False

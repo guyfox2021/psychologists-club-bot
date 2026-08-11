@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal, InvalidOperation
 
 from aiogram import Bot, F, Router
@@ -8,8 +9,13 @@ from aiogram.types import CallbackQuery, Message
 from app.admin.callback_data import SettingsAdminCB
 from app.admin.keyboards import settings_menu_keyboard
 from app.database.models import BotSettings
+from app.database.repositories import UserRepository
+from app.services.access_service import AccessService
+from app.services.karma_service import KarmaService, build_member_tag
 from app.services.settings_service import ChannelValidationError, SettingsService
 from app.states.admin_states import SettingsStates
+
+_TAG_SYNC_DELAY_SECONDS = 0.1
 
 settings_router = Router(name="admin_settings")
 
@@ -40,6 +46,52 @@ async def on_show_chat_id(message: Message) -> None:
     links Telegram's Bot API cannot resolve directly (only @username or a numeric ID
     work for get_chat). Send /id inside the target group/channel to read it off here."""
     await message.answer(f"🆔 Chat ID: <code>{message.chat.id}</code>")
+
+
+@settings_router.message(Command("sync_tags"))
+async def on_sync_tags(message: Message, session, bot: Bot) -> None:
+    """Re-apply member tags for every user who has a role in our DB.
+
+    Tags are normally only ever set reactively (on join, on a karma-changing
+    reaction, on a manual role change in /search) -- there was never a way to
+    backfill tags for members who joined before those code paths existed, or
+    whose tag-set attempt silently failed (e.g. the USER_NOT_PARTICIPANT race
+    on join) and was never retried. This command re-syncs everyone at once.
+    """
+    settings_service = SettingsService(session)
+    bot_settings = await settings_service.get_settings()
+    if bot_settings.community_chat_id is None:
+        await message.answer("⚠️ Спільнота ще не підключена. Спочатку налаштуйте /settings.")
+        return
+
+    user_repo = UserRepository(session)
+    users = await user_repo.list_with_role()
+    if not users:
+        await message.answer("У базі немає користувачів з призначеною роллю.")
+        return
+
+    await message.answer(f"🔄 Оновлюю теги для {len(users)} користувачів...")
+
+    karma_service = KarmaService(session)
+    access_service = AccessService(bot)
+    tagged = 0
+    skipped = 0
+    for user in users:
+        karma_points = await karma_service.get_karma_points(user.id)
+        tag = build_member_tag(user.role.label_uk, karma_points)
+        success = await access_service.set_member_tag(
+            bot_settings.community_chat_id, user.telegram_id, tag
+        )
+        if success:
+            tagged += 1
+        else:
+            skipped += 1
+        await asyncio.sleep(_TAG_SYNC_DELAY_SECONDS)
+
+    await message.answer(
+        f"✅ Готово.\nОновлено тегів: {tagged}\n"
+        f"Пропущено (не в групі, адмін/творець чату, або помилка): {skipped}"
+    )
 
 
 @settings_router.callback_query(SettingsAdminCB.filter(F.action == "trial_days"))
