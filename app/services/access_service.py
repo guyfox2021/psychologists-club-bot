@@ -1,9 +1,12 @@
+import asyncio
 import logging
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 
 logger = logging.getLogger(__name__)
+
+_TAG_RETRY_DELAY_SECONDS = 1.5
 
 
 class AccessService:
@@ -49,10 +52,29 @@ class AccessService:
         Only applies to regular (non-admin, non-creator) members -- Telegram
         rejects it with CHAT_CREATOR_REQUIRED/similar for admins -- so this is
         best-effort and safe to call speculatively without pre-checking status.
+
+        Retries once on USER_NOT_PARTICIPANT: when called right off a join
+        (`chat_member` JOIN_TRANSITION), Telegram's own membership state can
+        lag a moment behind the update it just sent us -- confirmed live, the
+        very first tag attempt right after a join sometimes fails with exactly
+        this error even though the user really did just join.
         """
-        try:
-            await self._bot.set_chat_member_tag(chat_id=chat_id, user_id=telegram_id, tag=tag)
-        except TelegramBadRequest as error:
-            logger.warning(
-                "Could not set tag for user %s in chat %s: %s", telegram_id, chat_id, error
-            )
+        for attempt in range(2):
+            try:
+                await self._bot.set_chat_member_tag(chat_id=chat_id, user_id=telegram_id, tag=tag)
+                return
+            except TelegramBadRequest as error:
+                if "USER_NOT_PARTICIPANT" in str(error) and attempt == 0:
+                    logger.info(
+                        "Tag attempt for user %s in chat %s hit USER_NOT_PARTICIPANT, "
+                        "retrying in %ss",
+                        telegram_id,
+                        chat_id,
+                        _TAG_RETRY_DELAY_SECONDS,
+                    )
+                    await asyncio.sleep(_TAG_RETRY_DELAY_SECONDS)
+                    continue
+                logger.warning(
+                    "Could not set tag for user %s in chat %s: %s", telegram_id, chat_id, error
+                )
+                return
