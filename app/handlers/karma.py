@@ -124,7 +124,7 @@ async def on_message_reaction(
     if message_feedback is None:
         logger.info(
             "message_reaction: ignored, message %s in chat %s is not tracked "
-            "(author wasn't an eligible verified Psychologist/Supervisor)",
+            "(author wasn't an eligible verified Student/Psychologist/Supervisor)",
             event.message_id,
             event.chat.id,
         )

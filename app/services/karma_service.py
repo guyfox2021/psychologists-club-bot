@@ -15,7 +15,11 @@ from app.database.repositories import (
 logger = logging.getLogger(__name__)
 
 NEGATIVE_VOTES_ALERT_THRESHOLD = 5
-_ELIGIBLE_AUTHOR_ROLES = {UserRoleCode.PSYCHOLOGIST.value, UserRoleCode.SUPERVISOR.value}
+_ELIGIBLE_AUTHOR_ROLES = {
+    UserRoleCode.STUDENT.value,
+    UserRoleCode.PSYCHOLOGIST.value,
+    UserRoleCode.SUPERVISOR.value,
+}
 _MAX_TAG_LENGTH = 16  # Telegram member-tag hard limit, no emoji allowed
 
 
