@@ -132,9 +132,17 @@ async def on_message_reaction(
 
     user_repo = UserRepository(session)
     voter = await user_repo.get_by_telegram_id(event.user.id)
-    if not await karma_service.is_verified(voter):
+    user_service = UserService(session)
+    is_voter_admin = await user_service.is_admin(event.user.id, settings.super_admin_id_list)
+    if not is_voter_admin and not await karma_service.is_verified(voter):
         logger.info(
             "message_reaction: ignored, voter telegram_id=%s is unknown or not verified",
+            event.user.id,
+        )
+        return
+    if voter is None:
+        logger.info(
+            "message_reaction: ignored, admin voter telegram_id=%s has no user record yet",
             event.user.id,
         )
         return
