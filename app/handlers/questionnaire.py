@@ -1,12 +1,13 @@
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from app.database.models.enums import ApplicationStatus, UserRoleCode
-from app.database.repositories import RoleRepository
+from app.database.models.enums import ApplicationStatus, SubscriptionStatus, UserRoleCode
+from app.database.repositories import RoleRepository, SettingsRepository, SubscriptionRepository
 from app.keyboards.callback_data import RoleCB, StartCB
 from app.keyboards.documents import documents_upload_keyboard
 from app.keyboards.role_select import role_select_keyboard
+from app.services.access_service import AccessService
 from app.services.application_service import ApplicationService
 from app.services.user_service import UserService
 from app.states.documents_states import DocumentUploadStates
@@ -14,9 +15,41 @@ from app.states.questionnaire_states import QuestionnaireStates
 
 router = Router(name="questionnaire")
 
+_ACTIVE_SUBSCRIPTION_STATUSES = {SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL}
+
+
+async def _resend_invite_if_active(callback: CallbackQuery, session, bot: Bot, user) -> None:
+    """Re-issue a fresh invite link for an already-verified user with active access.
+
+    Covers the case where an admin manually removed the user from the Telegram
+    group (outside the bot's own kick flow) -- without this, an already-APPROVED
+    user has no way back in through the bot at all.
+    """
+    subscription_repo = SubscriptionRepository(session)
+    subscription = await subscription_repo.get_by_user_id(user.id)
+    settings_repo = SettingsRepository(session)
+    bot_settings = await settings_repo.get_or_create()
+
+    if (
+        subscription is not None
+        and subscription.status in _ACTIVE_SUBSCRIPTION_STATUSES
+        and bot_settings.community_chat_id is not None
+    ):
+        access_service = AccessService(bot)
+        invite_link = await access_service.create_invite_link(
+            bot_settings.community_chat_id, name=f"user_{user.telegram_id}", member_limit=1
+        )
+        await callback.message.edit_text(
+            "✅ Вашу верифікацію вже завершено раніше.\n\n"
+            f"🔗 Ваше нове посилання для вступу до спільноти: {invite_link}"
+        )
+    else:
+        await callback.message.edit_text("✅ Вашу верифікацію вже завершено раніше.")
+    await callback.answer()
+
 
 @router.callback_query(StartCB.filter(F.action == "verify"))
-async def on_start_verification(callback: CallbackQuery, state: FSMContext, session) -> None:
+async def on_start_verification(callback: CallbackQuery, state: FSMContext, session, bot: Bot) -> None:
     user_service = UserService(session)
     user = await user_service.get_by_telegram_id(callback.from_user.id)
     application_service = ApplicationService(session)
@@ -30,8 +63,7 @@ async def on_start_verification(callback: CallbackQuery, state: FSMContext, sess
         return
 
     if application is not None and application.status == ApplicationStatus.APPROVED:
-        await callback.message.edit_text("✅ Вашу верифікацію вже завершено раніше.")
-        await callback.answer()
+        await _resend_invite_if_active(callback, session, bot, user)
         return
 
     if application is not None and application.status == ApplicationStatus.NEED_MORE_DOCS:
