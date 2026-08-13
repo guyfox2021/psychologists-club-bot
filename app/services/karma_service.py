@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 NEGATIVE_VOTES_ALERT_THRESHOLD = 5
 _ELIGIBLE_AUTHOR_ROLES = {
     UserRoleCode.STUDENT.value,
+    UserRoleCode.PSYCHOLOGIST_STARTER.value,
     UserRoleCode.PSYCHOLOGIST.value,
     UserRoleCode.SUPERVISOR.value,
 }

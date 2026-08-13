@@ -83,7 +83,14 @@ async def on_start_verification(callback: CallbackQuery, state: FSMContext, sess
     roles = await role_repo.list_all()
     await state.set_state(QuestionnaireStates.role)
     await callback.message.edit_text(
-        "🎓 Оберіть вашу роль у спільноті:", reply_markup=role_select_keyboard(roles)
+        "Оберіть категорію відповідно до вашого статусу та року отримання диплома:\n\n"
+        "🎓 Студент — навчаєтесь за спеціальністю «Психологія» та ще не отримали диплом "
+        "про психологічну освіту.\n\n"
+        "🌱 Психолог на старті — отримали диплом про психологічну освіту менше 5 років тому.\n\n"
+        "🧠 Психолог — отримали диплом про психологічну освіту 5 або більше років тому.\n\n"
+        "👨‍🏫 Супервізор — маєте відповідну психологічну освіту та проводите супервізію "
+        "інших психологів.",
+        reply_markup=role_select_keyboard(roles),
     )
     await callback.answer()
 

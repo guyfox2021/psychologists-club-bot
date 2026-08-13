@@ -3,6 +3,7 @@ import enum
 
 class UserRoleCode(str, enum.Enum):
     STUDENT = "student"
+    PSYCHOLOGIST_STARTER = "psychologist_starter"
     PSYCHOLOGIST = "psychologist"
     SUPERVISOR = "supervisor"
 
