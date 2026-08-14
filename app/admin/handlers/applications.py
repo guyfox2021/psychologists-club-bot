@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 applications_router = Router(name="admin_applications")
 
+_IMAGE_MIME_TYPES = {"image/jpeg", "image/png"}
+
 
 def format_application_card(application: Application, status_footer: str | None = None) -> str:
     role_label = application.role.label_uk if application.role else "—"
@@ -57,7 +59,10 @@ async def notify_admins_new_application(
         try:
             await bot.send_message(admin_id, card_text, reply_markup=keyboard)
             for document in application.documents:
-                await bot.send_document(admin_id, document.telegram_file_id)
+                if document.mime_type in _IMAGE_MIME_TYPES:
+                    await bot.send_photo(admin_id, document.telegram_file_id)
+                else:
+                    await bot.send_document(admin_id, document.telegram_file_id)
         except (TelegramForbiddenError, TelegramBadRequest) as error:
             logger.warning(
                 "Could not notify admin %s about application %s: %s",
