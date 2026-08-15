@@ -1,8 +1,9 @@
 import logging
 
-from aiogram import Bot, Router
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import JOIN_TRANSITION, ChatMemberUpdatedFilter
-from aiogram.types import ChatMemberUpdated
+from aiogram.types import ChatMemberUpdated, Message
 
 from app.database.repositories import SettingsRepository
 from app.services.access_service import AccessService
@@ -12,6 +13,30 @@ from app.services.user_service import UserService
 logger = logging.getLogger(__name__)
 
 router = Router(name="chat_member")
+
+
+@router.message(F.new_chat_members)
+async def on_join_service_message(message: Message, session, bot: Bot) -> None:
+    """Delete the "X joined via invite link" service message to reduce clutter.
+
+    Best-effort: requires the bot to have `can_delete_messages`. Silently logs
+    and moves on if deletion fails (e.g. right not granted, or the message was
+    already deleted by someone else) rather than raising.
+    """
+    settings_repo = SettingsRepository(session)
+    bot_settings = await settings_repo.get_or_create()
+    if bot_settings.community_chat_id != message.chat.id:
+        return
+
+    try:
+        await bot.delete_message(message.chat.id, message.message_id)
+    except (TelegramBadRequest, TelegramForbiddenError) as error:
+        logger.warning(
+            "Could not delete join service message %s in chat %s: %s",
+            message.message_id,
+            message.chat.id,
+            error,
+        )
 
 
 @router.chat_member(ChatMemberUpdatedFilter(member_status_changed=JOIN_TRANSITION))
