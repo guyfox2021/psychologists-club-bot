@@ -30,6 +30,7 @@ async def on_join_service_message(message: Message, session, bot: Bot) -> None:
 
     try:
         await bot.delete_message(message.chat.id, message.message_id)
+        logger.info("Deleted join service message %s in chat %s", message.message_id, message.chat.id)
     except (TelegramBadRequest, TelegramForbiddenError) as error:
         logger.warning(
             "Could not delete join service message %s in chat %s: %s",
