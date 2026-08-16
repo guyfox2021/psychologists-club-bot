@@ -27,7 +27,10 @@ class AdminOnlyMiddleware(BaseMiddleware):
         if not await user_service.is_admin(telegram_user.id, self._super_admin_ids):
             if isinstance(event, CallbackQuery):
                 await event.answer("⛔ Доступ заборонено.", show_alert=True)
-            elif isinstance(event, Message):
+            elif isinstance(event, Message) and event.chat.type == "private":
+                # Only reply in DM -- a public "access denied" for an admin
+                # command someone typed in the group chat is just clutter and
+                # confusion for everyone else there, not useful to anyone.
                 await event.answer("⛔ У вас немає доступу до цієї команди.")
             return None
 
