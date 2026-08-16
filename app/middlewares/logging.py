@@ -25,4 +25,23 @@ class LoggingMiddleware(BaseMiddleware):
                 event.event_type,
                 user.id if user else None,
             )
+            # Temporary deep diagnostic: dump the full raw payload for any
+            # group message without plain text (service messages -- joins,
+            # leaves, pins, etc. -- typically have no .text) and for every
+            # chat_member update, so we can see exactly what Telegram sends
+            # for a real join without guessing from the typed model alone.
+            if (
+                event.message is not None
+                and event.message.chat.type in {"group", "supergroup"}
+                and event.message.text is None
+            ):
+                logger.info(
+                    "RAW service-like group message: %s",
+                    event.message.model_dump_json(exclude_none=True),
+                )
+            if event.chat_member is not None:
+                logger.info(
+                    "RAW chat_member update: %s",
+                    event.chat_member.model_dump_json(exclude_none=True),
+                )
         return await handler(event, data)
