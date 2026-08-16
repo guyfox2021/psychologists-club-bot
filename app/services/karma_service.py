@@ -23,14 +23,23 @@ _ELIGIBLE_AUTHOR_ROLES = {
 }
 _MAX_TAG_LENGTH = 16  # Telegram member-tag hard limit, no emoji allowed
 
+# Full role names don't all fit in the tag once the karma number is appended
+# (e.g. "Психолог на старті 12" is way over 16 chars) -- shortened tag-only
+# labels for those, while the full name stays as-is for the role-selection
+# button/description text (Role.label_uk is untouched).
+_SHORT_TAG_LABELS = {
+    UserRoleCode.PSYCHOLOGIST_STARTER.value: "Початківець",
+}
 
-def build_member_tag(role_label: str, karma_points: int) -> str:
+
+def build_member_tag(role_code: str, role_label: str, karma_points: int) -> str:
     """Member tag shown next to the user's name: "<role> <karma points>".
 
     No emoji allowed in tags (Bot API constraint), so the karma indicator is
     just the plain number, truncated to fit Telegram's 16-char tag limit.
     """
-    return f"{role_label} {karma_points}"[:_MAX_TAG_LENGTH]
+    label = _SHORT_TAG_LABELS.get(role_code, role_label)
+    return f"{label} {karma_points}"[:_MAX_TAG_LENGTH]
 
 
 @dataclass(frozen=True)

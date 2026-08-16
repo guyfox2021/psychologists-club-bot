@@ -61,7 +61,7 @@ async def on_member_joined(event: ChatMemberUpdated, session, bot: Bot) -> None:
 
     karma_service = KarmaService(session)
     karma_points = await karma_service.get_karma_points(user.id)
-    tag = build_member_tag(user.role.label_uk, karma_points)
+    tag = build_member_tag(user.role.code, user.role.label_uk, karma_points)
 
     access_service = AccessService(bot)
     await access_service.set_member_tag(event.chat.id, user.telegram_id, tag)

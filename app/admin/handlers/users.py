@@ -245,7 +245,7 @@ async def on_change_role_apply(
         await access_service.set_member_tag(
             bot_settings.community_chat_id,
             user.telegram_id,
-            build_member_tag(role.label_uk, karma_points),
+            build_member_tag(role.code, role.label_uk, karma_points),
         )
 
     answer_text = "Роль оновлено"

@@ -189,7 +189,7 @@ async def _refresh_author_tag(
 
     access_service = AccessService(bot)
     await access_service.set_member_tag(
-        chat_id, author.telegram_id, build_member_tag(author.role.label_uk, karma_points)
+        chat_id, author.telegram_id, build_member_tag(author.role.code, author.role.label_uk, karma_points)
     )
 
 

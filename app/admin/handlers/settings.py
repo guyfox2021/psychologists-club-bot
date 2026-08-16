@@ -78,7 +78,7 @@ async def on_sync_tags(message: Message, session, bot: Bot) -> None:
     skipped = 0
     for user in users:
         karma_points = await karma_service.get_karma_points(user.id)
-        tag = build_member_tag(user.role.label_uk, karma_points)
+        tag = build_member_tag(user.role.code, user.role.label_uk, karma_points)
         success = await access_service.set_member_tag(
             bot_settings.community_chat_id, user.telegram_id, tag
         )
