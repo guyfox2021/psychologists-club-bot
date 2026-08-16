@@ -15,7 +15,7 @@ from app.services.karma_service import KarmaService, build_member_tag
 from app.services.settings_service import ChannelValidationError, SettingsService
 from app.states.admin_states import SettingsStates
 
-_TAG_SYNC_DELAY_SECONDS = 0.1
+_TAG_SYNC_DELAY_SECONDS = 1.0  # SetChatMemberTag has a tight per-chat rate limit
 
 settings_router = Router(name="admin_settings")
 

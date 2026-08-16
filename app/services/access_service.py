@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,10 @@ class AccessService:
         very first tag attempt right after a join sometimes fails with exactly
         this error even though the user really did just join.
 
+        Also retries once on flood control (`TelegramRetryAfter`) -- a bulk
+        caller (e.g. a tag-resync command) can hit Telegram's rate limit for
+        this method well before working through every member otherwise.
+
         Returns whether the tag was actually applied, so bulk callers (e.g. a
         tag-resync command) can report how many members were skipped.
         """
@@ -66,6 +70,22 @@ class AccessService:
             try:
                 await self._bot.set_chat_member_tag(chat_id=chat_id, user_id=telegram_id, tag=tag)
                 return True
+            except TelegramRetryAfter as error:
+                if attempt == 0:
+                    logger.info(
+                        "Tag attempt for user %s in chat %s hit flood control, retrying in %ss",
+                        telegram_id,
+                        chat_id,
+                        error.retry_after,
+                    )
+                    await asyncio.sleep(error.retry_after)
+                    continue
+                logger.warning(
+                    "Could not set tag for user %s in chat %s: flood control persisted",
+                    telegram_id,
+                    chat_id,
+                )
+                return False
             except TelegramBadRequest as error:
                 if "USER_NOT_PARTICIPANT" in str(error) and attempt == 0:
                     logger.info(
@@ -77,6 +97,13 @@ class AccessService:
                     )
                     await asyncio.sleep(_TAG_RETRY_DELAY_SECONDS)
                     continue
+                logger.warning(
+                    "Could not set tag for user %s in chat %s: %s", telegram_id, chat_id, error
+                )
+                return False
+            except TelegramForbiddenError as error:
+                # e.g. the user deactivated their Telegram account -- can happen
+                # to any member at any time, unrelated to the bot's own rights.
                 logger.warning(
                     "Could not set tag for user %s in chat %s: %s", telegram_id, chat_id, error
                 )
