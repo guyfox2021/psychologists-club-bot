@@ -23,9 +23,20 @@ async def on_join_service_message(message: Message, session, bot: Bot) -> None:
     and moves on if deletion fails (e.g. right not granted, or the message was
     already deleted by someone else) rather than raising.
     """
+    logger.info(
+        "on_join_service_message fired: chat=%s message_id=%s new_chat_members=%s",
+        message.chat.id,
+        message.message_id,
+        [u.id for u in message.new_chat_members] if message.new_chat_members else None,
+    )
     settings_repo = SettingsRepository(session)
     bot_settings = await settings_repo.get_or_create()
     if bot_settings.community_chat_id != message.chat.id:
+        logger.info(
+            "on_join_service_message: chat %s does not match configured community_chat_id %s",
+            message.chat.id,
+            bot_settings.community_chat_id,
+        )
         return
 
     try:
