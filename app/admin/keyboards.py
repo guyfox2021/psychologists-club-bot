@@ -23,7 +23,11 @@ def application_review_keyboard(application_id: int) -> InlineKeyboardMarkup:
         text="📎 Запросити документи",
         callback_data=AdminReviewCB(action="request_docs", application_id=application_id),
     )
-    builder.adjust(2, 1)
+    builder.button(
+        text="🔄 Невідповідний статус",
+        callback_data=AdminReviewCB(action="wrong_status", application_id=application_id),
+    )
+    builder.adjust(2, 1, 1)
     return builder.as_markup()
 
 

@@ -14,6 +14,7 @@ from app.config import Settings
 from app.database.models import Application
 from app.database.models.enums import ApplicationStatus, SubscriptionStatus, UserRoleCode
 from app.database.repositories import SettingsRepository, SubscriptionRepository
+from app.keyboards.common import restart_verification_keyboard
 from app.keyboards.documents import documents_upload_keyboard
 from app.keyboards.payment import payment_confirmation_keyboard
 from app.services.access_service import AccessService
@@ -280,3 +281,56 @@ async def on_request_docs_comment(message: Message, state: FSMContext, session, 
         reply_markup=documents_upload_keyboard(),
     )
     await message.answer(f"Заявку #{application_id} повернуто на доопрацювання.")
+
+
+@applications_router.callback_query(AdminReviewCB.filter(F.action == "wrong_status"))
+async def on_wrong_status_start(
+    callback: CallbackQuery, callback_data: AdminReviewCB, state: FSMContext
+) -> None:
+    await state.set_state(ApplicationReviewStates.wrong_status_comment)
+    await state.update_data(application_id=callback_data.application_id)
+    await callback.message.answer(
+        "✏️ Введіть коментар: який статус підходить цій людині (наприклад, "
+        "«Психолог на старті» або «Студент»):"
+    )
+    await callback.answer()
+
+
+@applications_router.message(ApplicationReviewStates.wrong_status_comment)
+async def on_wrong_status_comment(message: Message, state: FSMContext, session, bot: Bot) -> None:
+    """Reject the application with the admin's status-correction comment, then
+    offer the applicant a one-tap restart -- reuses the existing REJECTED
+    fallthrough in `on_start_verification` (questionnaire.py), which already
+    sends anyone whose latest application is REJECTED back to role selection,
+    so no changes were needed there.
+    """
+    data = await state.get_data()
+    application_id = data.get("application_id")
+    await state.clear()
+
+    application_service = ApplicationService(session)
+    application = await application_service.reject(
+        application_id, message.from_user.id, message.text, datetime.now(UTC)
+    )
+    if application is None:
+        await message.answer("Заявку не знайдено.")
+        return
+
+    admin_log_service = AdminLogService(session)
+    await admin_log_service.log(
+        message.from_user.id,
+        "wrong_status_application",
+        target_user_id=application.user_id,
+        details={"application_id": application_id, "comment": message.text},
+    )
+
+    user_service = UserService(session)
+    owner = await user_service.get_by_id(application.user_id)
+    await bot.send_message(
+        owner.telegram_id,
+        "🔄 Адміністратор вважає, що для вас підходить інший статус.\n\n"
+        f"Коментар: {message.text}\n\n"
+        "Натисніть кнопку нижче, щоб почати заново і обрати підходящий статус.",
+        reply_markup=restart_verification_keyboard(),
+    )
+    await message.answer(f"Заявку #{application_id} позначено як таку, що потребує зміни статусу.")

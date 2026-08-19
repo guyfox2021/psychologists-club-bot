@@ -19,3 +19,11 @@ def back_to_start_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="⬅️ Назад", callback_data=StartCB(action="back").pack())
     )
     return builder.as_markup()
+
+
+def restart_verification_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="🔄 Почати заново", callback_data=StartCB(action="verify").pack())
+    )
+    return builder.as_markup()

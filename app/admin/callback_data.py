@@ -2,7 +2,7 @@ from aiogram.filters.callback_data import CallbackData
 
 
 class AdminReviewCB(CallbackData, prefix="admrev"):
-    action: str  # approve | reject | request_docs
+    action: str  # approve | reject | request_docs | wrong_status
     application_id: int
 
 
