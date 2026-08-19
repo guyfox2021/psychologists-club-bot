@@ -21,4 +21,8 @@ class BroadcastCB(CallbackData, prefix="bcast"):
 
 
 class SettingsAdminCB(CallbackData, prefix="setadm"):
-    action: str  # trial_days | price | duration | reminders | channel
+    action: str  # trial_days | price | duration | reminders | channel | role_prices
+
+
+class RolePriceCB(CallbackData, prefix="roleprice"):
+    role_id: int

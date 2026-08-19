@@ -5,6 +5,7 @@ from app.admin.callback_data import (
     AdminChangeRoleCB,
     AdminReviewCB,
     BroadcastCB,
+    RolePriceCB,
     SettingsAdminCB,
     UserAdminCB,
 )
@@ -77,11 +78,25 @@ def broadcast_audience_keyboard() -> InlineKeyboardMarkup:
 def settings_menu_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="📅 Тріал (днів)", callback_data=SettingsAdminCB(action="trial_days"))
-    builder.button(text="💵 Ціна підписки", callback_data=SettingsAdminCB(action="price"))
+    builder.button(text="💵 Ціни за роллю", callback_data=SettingsAdminCB(action="role_prices"))
+    builder.button(
+        text="💵 Ціна підписки (запасна)", callback_data=SettingsAdminCB(action="price")
+    )
     builder.button(
         text="📆 Тривалість підписки (днів)", callback_data=SettingsAdminCB(action="duration")
     )
     builder.button(text="🔔 Нагадування (днів до)", callback_data=SettingsAdminCB(action="reminders"))
     builder.button(text="📢 Канал спільноти", callback_data=SettingsAdminCB(action="channel"))
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def role_price_select_keyboard(roles: list[Role]) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for role in roles:
+        price_hint = f"{role.price_uah} грн" if role.price_uah is not None else "безкоштовно"
+        builder.button(
+            text=f"{role.label_uk} — {price_hint}", callback_data=RolePriceCB(role_id=role.id)
+        )
     builder.adjust(1)
     return builder.as_markup()

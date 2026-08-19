@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,3 +23,11 @@ class RoleRepository:
     async def list_all(self) -> list[Role]:
         result = await self._session.execute(select(Role).order_by(Role.id.asc()))
         return list(result.scalars().all())
+
+    async def update_price(self, role_id: int, price: Decimal | None) -> Role | None:
+        role = await self.get_by_id(role_id)
+        if role is None:
+            return None
+        role.price_uah = price
+        await self._session.flush()
+        return role

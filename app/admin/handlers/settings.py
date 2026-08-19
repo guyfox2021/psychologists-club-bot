@@ -6,10 +6,11 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from app.admin.callback_data import SettingsAdminCB
-from app.admin.keyboards import settings_menu_keyboard
-from app.database.models import BotSettings
-from app.database.repositories import UserRepository
+from app.admin.callback_data import RolePriceCB, SettingsAdminCB
+from app.admin.keyboards import role_price_select_keyboard, settings_menu_keyboard
+from app.config import Settings
+from app.database.models import BotSettings, Role
+from app.database.repositories import RoleRepository, UserRepository
 from app.services.access_service import AccessService
 from app.services.karma_service import KarmaService, build_member_tag
 from app.services.settings_service import ChannelValidationError, SettingsService
@@ -20,13 +21,31 @@ _TAG_SYNC_DELAY_SECONDS = 1.0  # SetChatMemberTag has a tight per-chat rate limi
 settings_router = Router(name="admin_settings")
 
 
-def _format_settings(bot_settings: BotSettings) -> str:
+def _format_settings(
+    bot_settings: BotSettings,
+    roles: list[Role] | None = None,
+    payment_required: bool | None = None,
+) -> str:
     reminders = ", ".join(str(day) for day in bot_settings.reminder_days_before) or "—"
     channel = str(bot_settings.community_chat_id) if bot_settings.community_chat_id else "не налаштовано"
+    price_section = ""
+    if roles is not None:
+        role_price_lines = "\n".join(
+            f"  • {role.label_uk}: <b>{role.price_uah} {bot_settings.subscription_currency}</b>"
+            if role.price_uah is not None
+            else f"  • {role.label_uk}: безкоштовно"
+            for role in roles
+        )
+        price_section = f"💵 Ціни за роллю (після тріалу):\n{role_price_lines}\n"
+    payment_section = ""
+    if payment_required is not None:
+        payment_state = "увімкнена" if payment_required else "вимкнена"
+        payment_section = f"💳 Оплата: <b>{payment_state}</b> (PAYMENT_REQUIRED)\n"
     return (
         "⚙️ <b>Налаштування</b>\n\n"
         f"📅 Тріал: <b>{bot_settings.trial_days}</b> днів\n"
-        f"💵 Ціна підписки: <b>{bot_settings.subscription_price} {bot_settings.subscription_currency}</b>\n"
+        f"{payment_section}"
+        f"{price_section}"
         f"📆 Тривалість підписки: <b>{bot_settings.subscription_duration_days}</b> днів\n"
         f"🔔 Нагадування за (днів до): <b>{reminders}</b>\n"
         f"📢 Канал спільноти: <b>{channel}</b>"
@@ -34,10 +53,15 @@ def _format_settings(bot_settings: BotSettings) -> str:
 
 
 @settings_router.message(Command("settings"))
-async def on_settings_menu(message: Message, session) -> None:
+async def on_settings_menu(message: Message, session, settings: Settings) -> None:
     settings_service = SettingsService(session)
     bot_settings = await settings_service.get_settings()
-    await message.answer(_format_settings(bot_settings), reply_markup=settings_menu_keyboard())
+    role_repo = RoleRepository(session)
+    roles = await role_repo.list_all()
+    await message.answer(
+        _format_settings(bot_settings, roles, settings.payment_required),
+        reply_markup=settings_menu_keyboard(),
+    )
 
 
 @settings_router.message(Command("id"))
@@ -106,6 +130,57 @@ async def on_edit_price(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(SettingsStates.price)
     await callback.message.edit_text("Введіть нову ціну підписки, наприклад 500 або 499.99:")
     await callback.answer()
+
+
+@settings_router.callback_query(SettingsAdminCB.filter(F.action == "role_prices"))
+async def on_edit_role_prices(callback: CallbackQuery, session) -> None:
+    role_repo = RoleRepository(session)
+    roles = await role_repo.list_all()
+    await callback.message.edit_text(
+        "Оберіть роль, ціну якої хочете змінити:", reply_markup=role_price_select_keyboard(roles)
+    )
+    await callback.answer()
+
+
+@settings_router.callback_query(RolePriceCB.filter())
+async def on_role_price_select(
+    callback: CallbackQuery, callback_data: RolePriceCB, state: FSMContext
+) -> None:
+    await state.set_state(SettingsStates.role_price)
+    await state.update_data(role_id=callback_data.role_id)
+    await callback.message.edit_text(
+        "Введіть нову ціну для цієї ролі в грн (наприклад 225), або 0 щоб зробити роль безкоштовною:"
+    )
+    await callback.answer()
+
+
+@settings_router.message(SettingsStates.role_price)
+async def on_role_price_input(message: Message, state: FSMContext, session, settings: Settings) -> None:
+    data = await state.get_data()
+    role_id = data.get("role_id")
+    try:
+        price = Decimal(message.text.strip().replace(",", "."))
+        if price < 0:
+            raise InvalidOperation
+    except InvalidOperation:
+        await message.answer("⚠️ Введіть невід'ємне число, наприклад 225 або 0.")
+        return
+
+    role_repo = RoleRepository(session)
+    role = await role_repo.update_price(role_id, price if price > 0 else None)
+    await state.clear()
+    if role is None:
+        await message.answer("Роль не знайдено.")
+        return
+
+    price_text = f"{role.price_uah} грн" if role.price_uah is not None else "безкоштовно"
+    settings_service = SettingsService(session)
+    bot_settings = await settings_service.get_settings()
+    roles = await role_repo.list_all()
+    await message.answer(
+        f"✅ Ціну для ролі «{role.label_uk}» оновлено: {price_text}.\n\n"
+        + _format_settings(bot_settings, roles, settings.payment_required)
+    )
 
 
 @settings_router.callback_query(SettingsAdminCB.filter(F.action == "duration"))

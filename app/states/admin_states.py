@@ -17,3 +17,4 @@ class SettingsStates(StatesGroup):
     duration = State()
     reminders = State()
     channel = State()
+    role_price = State()

@@ -149,8 +149,10 @@ async def on_approve(
     bot_settings = await settings_repo.get_or_create()
 
     is_supervisor = application.role and application.role.code == UserRoleCode.SUPERVISOR.value
+    role_price = application.role.price_uah if application.role else None
+    requires_payment = settings.payment_required and role_price is not None
 
-    if is_supervisor or not settings.payment_required:
+    if not requires_payment:
         welcome_text = (
             "🎉 Вітаємо! Вашу верифікацію успішно завершено.\n\n"
             + (
@@ -178,8 +180,9 @@ async def on_approve(
             owner.telegram_id,
             "🎉 Вітаємо! Вашу верифікацію успішно завершено.\n\n"
             "Перед отриманням доступу, будь ласка, підтвердьте спосіб оплати.\n"
-            "Кошти не будуть списані сьогодні — оплата почнеться лише після завершення "
-            "безкоштовного пробного періоду.",
+            "Кошти не будуть списані сьогодні — це лише підтвердження картки. Після завершення "
+            f"безкоштовного пробного періоду ({bot_settings.trial_days} дн.) з картки спишеться "
+            f"{role_price} {bot_settings.subscription_currency} за {bot_settings.subscription_duration_days} днів.",
             reply_markup=payment_confirmation_keyboard(),
         )
 

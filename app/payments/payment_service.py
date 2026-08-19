@@ -130,27 +130,42 @@ class PaymentService:
     async def charge_subscription(
         self, user_id: int, transaction_type: PaymentTransactionType
     ) -> MonobankInvoiceStatus:
-        """Synchronously charge the user's saved card (trial-end or renewal)."""
+        """Synchronously charge the user's saved card (trial-end or renewal).
+
+        Amount is the user's *role* price (`Role.price_uah`) when set -- each
+        paid role can have its own price -- falling back to the old single
+        global `settings.subscription_price` for anyone whose role has no
+        price configured (shouldn't normally happen: such roles are granted
+        free access at approval time and never reach a real charge, but this
+        keeps the charge from crashing outright if that invariant ever breaks).
+        """
         token = await self._token_repo.get_active_by_user(user_id)
         if token is None:
             raise MonobankError(f"User {user_id} has no active payment token")
 
+        user = await self._user_repo.get_by_id(user_id)
         bot_settings = await self._settings_repo.get_or_create()
+        amount = (
+            user.role.price_uah
+            if user and user.role and user.role.price_uah is not None
+            else bot_settings.subscription_price
+        )
+        currency = bot_settings.subscription_currency
         order_reference = self._new_order_reference("charge", user_id)
 
         await self._payment_repo.create(
             user_id=user_id,
             order_reference=order_reference,
-            amount=bot_settings.subscription_price,
-            currency=bot_settings.subscription_currency,
+            amount=amount,
+            currency=currency,
             transaction_type=transaction_type,
             payment_token_id=token.id,
         )
 
         response = await self._client.charge_by_token(
             card_token=token.rec_token,
-            amount=float(bot_settings.subscription_price),
-            currency=bot_settings.subscription_currency,
+            amount=float(amount),
+            currency=currency,
         )
 
         await self._payment_repo.update_status(
