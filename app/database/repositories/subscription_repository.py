@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -65,6 +65,26 @@ class SubscriptionRepository:
                 ),
                 Subscription.next_charge_at.is_not(None),
                 Subscription.next_charge_at <= before,
+            )
+        )
+        return list(result.scalars().all())
+
+    async def list_cancelled_expired(self, before: datetime) -> list[Subscription]:
+        """Cancelled subscriptions whose already-paid-for access period is over.
+
+        Checks whichever end date applies: `subscription_end` for a normal
+        paid period, `trial_end` for any legacy trial subscription that was
+        cancelled before this codebase stopped creating new trials.
+        """
+        result = await self._session.execute(
+            select(Subscription)
+            .options(selectinload(Subscription.user))
+            .where(
+                Subscription.status == SubscriptionStatus.CANCELLED,
+                or_(
+                    Subscription.subscription_end <= before,
+                    Subscription.trial_end <= before,
+                ),
             )
         )
         return list(result.scalars().all())

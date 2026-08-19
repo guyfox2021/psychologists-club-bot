@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 async def run_daily_maintenance(bot: Bot, settings: Settings) -> None:
     await _process_due_charges(bot, settings)
+    await _process_cancelled_expirations(bot, settings)
     await _send_expiration_reminders(bot, settings)
 
 
@@ -76,6 +77,45 @@ async def _process_due_charges(bot: Bot, settings: Settings) -> None:
                 "призупинено.\n\n"
                 "Оновіть спосіб оплати, щоб автоматично відновити доступ.",
                 reply_markup=payment_failed_keyboard(),
+            )
+
+
+async def _process_cancelled_expirations(bot: Bot, settings: Settings) -> None:
+    """Revoke access for CANCELLED subscriptions once their already-paid-for
+    period has actually run out -- cancelling stops future billing right
+    away (see SubscriptionService.cancel), but access itself continues until
+    this point, matching normal "cancel anytime, keep what you paid for"
+    subscription behavior.
+    """
+    now = datetime.now(UTC)
+
+    async with session_scope() as session:
+        subscription_repo = SubscriptionRepository(session)
+        settings_repo = SettingsRepository(session)
+        bot_settings = await settings_repo.get_or_create()
+
+        expired = await subscription_repo.list_cancelled_expired(now)
+        logger.info("Processing %s cancelled subscriptions past their end date", len(expired))
+
+        access_service = AccessService(bot)
+        notification_service = NotificationService(session, bot)
+
+        for subscription in expired:
+            user = subscription.user
+            if bot_settings.community_chat_id:
+                await access_service.kick_user(bot_settings.community_chat_id, user.telegram_id)
+                if subscription.invite_link:
+                    await access_service.revoke_invite_link(
+                        bot_settings.community_chat_id, subscription.invite_link
+                    )
+
+            await subscription_repo.update(user.id, invite_link=None)
+            await notification_service.send(
+                user.id,
+                user.telegram_id,
+                NotificationType.SUBSCRIPTION_ENDED,
+                "ℹ️ Ваша скасована підписка завершилась, доступ до спільноти закрито. "
+                "Ви можете повернутись у будь-який момент через /start.",
             )
 
 

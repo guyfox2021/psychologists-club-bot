@@ -6,7 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Subscription
 from app.database.models.enums import PaymentTransactionType, SubscriptionStatus
-from app.database.repositories import SettingsRepository, SubscriptionRepository, TrialRepository
+from app.database.repositories import (
+    PaymentTokenRepository,
+    SettingsRepository,
+    SubscriptionRepository,
+    TrialRepository,
+)
 from app.payments.monobank_client import MonobankClient, MonobankError
 from app.payments.payment_service import PaymentService
 from app.utils.datetime_utils import add_days
@@ -38,6 +43,7 @@ class SubscriptionService:
         self._subscription_repo = SubscriptionRepository(session)
         self._trial_repo = TrialRepository(session)
         self._settings_repo = SettingsRepository(session)
+        self._token_repo = PaymentTokenRepository(session)
 
     async def process_due_charge(self, subscription: Subscription) -> ChargeOutcome:
         transaction_type = (
@@ -90,3 +96,17 @@ class SubscriptionService:
             next_charge_at=next_retry_at,
         )
         return ChargeOutcome(success=False, user_id=subscription.user_id, retry_count=retry_count)
+
+    async def cancel(self, user_id: int) -> Subscription | None:
+        """Stop future auto-renewal. Access continues until whatever period
+        was already paid for (subscription_end, or trial_end for any legacy
+        trial subscription) -- see `_process_cancelled_expirations` in
+        app/scheduler/jobs.py for the pass that revokes access once that date
+        passes. Deactivating the card token is what actually prevents any
+        further charge, independent of the subscription's status.
+        """
+        now = datetime.now(UTC)
+        await self._token_repo.deactivate_all_for_user(user_id, now)
+        return await self._subscription_repo.update(
+            user_id, status=SubscriptionStatus.CANCELLED, next_charge_at=None
+        )

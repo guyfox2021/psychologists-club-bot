@@ -180,9 +180,9 @@ async def on_approve(
             owner.telegram_id,
             "🎉 Вітаємо! Вашу верифікацію успішно завершено.\n\n"
             "Перед отриманням доступу, будь ласка, підтвердьте спосіб оплати.\n"
-            "Кошти не будуть списані сьогодні — це лише підтвердження картки. Після завершення "
-            f"безкоштовного пробного періоду ({bot_settings.trial_days} дн.) з картки спишеться "
-            f"{role_price} {bot_settings.subscription_currency} за {bot_settings.subscription_duration_days} днів.",
+            f"Одразу після підтвердження картки з неї спишеться {role_price} "
+            f"{bot_settings.subscription_currency} за {bot_settings.subscription_duration_days} "
+            "днів доступу до спільноти (без пробного періоду).",
             reply_markup=payment_confirmation_keyboard(),
         )
 

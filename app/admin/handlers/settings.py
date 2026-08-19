@@ -36,14 +36,14 @@ def _format_settings(
             else f"  • {role.label_uk}: безкоштовно"
             for role in roles
         )
-        price_section = f"💵 Ціни за роллю (після тріалу):\n{role_price_lines}\n"
+        price_section = f"💵 Ціни за роллю (списується одразу, без тріалу):\n{role_price_lines}\n"
     payment_section = ""
     if payment_required is not None:
         payment_state = "увімкнена" if payment_required else "вимкнена"
         payment_section = f"💳 Оплата: <b>{payment_state}</b> (PAYMENT_REQUIRED)\n"
     return (
         "⚙️ <b>Налаштування</b>\n\n"
-        f"📅 Тріал: <b>{bot_settings.trial_days}</b> днів\n"
+        f"📅 Тріал: <b>{bot_settings.trial_days}</b> днів (не використовується — оплата без тріалу)\n"
         f"{payment_section}"
         f"{price_section}"
         f"📆 Тривалість підписки: <b>{bot_settings.subscription_duration_days}</b> днів\n"

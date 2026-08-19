@@ -24,3 +24,11 @@ def payment_failed_keyboard() -> InlineKeyboardMarkup:
     builder.button(text="⏳ Спробувати пізніше", callback_data=PaymentCB(action="retry_later"))
     builder.adjust(2, 1, 1)
     return builder.as_markup()
+
+
+def cancel_subscription_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ Так, скасувати", callback_data=PaymentCB(action="cancel_confirm"))
+    builder.button(text="⬅️ Ні, залишити", callback_data=PaymentCB(action="cancel_abort"))
+    builder.adjust(1)
+    return builder.as_markup()

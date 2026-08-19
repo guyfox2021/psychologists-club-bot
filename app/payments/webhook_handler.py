@@ -37,38 +37,52 @@ async def monobank_webhook_handler(request: web.Request) -> web.Response:
         payment_service = PaymentService(session, client)
         outcome = await payment_service.handle_authorization_result(callback)
 
-        if outcome.success and outcome.user_id is not None:
-            settings_repo = SettingsRepository(session)
-            bot_settings = await settings_repo.get_or_create()
-            user_repo = UserRepository(session)
-            user = await user_repo.get_by_id(outcome.user_id)
+        if not outcome.verified or outcome.user_id is None:
+            return web.Response(status=200)
 
-            if user is not None and bot_settings.community_chat_id is not None:
-                access_service = AccessService(bot)
-                invite_link = await access_service.create_invite_link(
-                    bot_settings.community_chat_id,
-                    name=f"user_{user.telegram_id}",
-                    member_limit=1,
-                )
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_id(outcome.user_id)
+        if user is None:
+            return web.Response(status=200)
 
-                subscription_repo = SubscriptionRepository(session)
-                await subscription_repo.update(user.id, invite_link=invite_link)
+        if not outcome.charged:
+            # Card verified, but the immediate charge failed -- no access yet.
+            # The daily retry job will keep trying automatically.
+            await bot.send_message(
+                user.telegram_id,
+                "⚠️ Картку підтверджено, але списати оплату не вдалося (недостатньо коштів "
+                "чи інша причина з боку банку). Ми спробуємо ще раз автоматично, або перевірте "
+                "картку і зверніться до адміністратора.",
+            )
+            return web.Response(status=200)
 
-                trial_end_text = (
-                    outcome.trial_end.strftime("%d.%m.%Y") if outcome.trial_end else "—"
-                )
-                await bot.send_message(
-                    user.telegram_id,
-                    "🎉 Спосіб оплати підтверджено! Розпочався ваш безкоштовний пробний період.\n\n"
-                    f"🔗 Посилання для вступу до спільноти: {invite_link}\n\n"
-                    f"Оплата підключиться автоматично {trial_end_text}, "
-                    "після завершення пробного періоду.",
-                )
-            elif user is not None:
-                logger.warning(
-                    "Community channel is not configured, cannot grant access to user %s",
-                    user.id,
-                )
+        settings_repo = SettingsRepository(session)
+        bot_settings = await settings_repo.get_or_create()
+
+        if bot_settings.community_chat_id is None:
+            logger.warning(
+                "Community channel is not configured, cannot grant access to user %s", user.id
+            )
+            return web.Response(status=200)
+
+        access_service = AccessService(bot)
+        invite_link = await access_service.create_invite_link(
+            bot_settings.community_chat_id, name=f"user_{user.telegram_id}", member_limit=1
+        )
+
+        subscription_repo = SubscriptionRepository(session)
+        await subscription_repo.update(user.id, invite_link=invite_link)
+
+        end_text = (
+            outcome.subscription_end.strftime("%d.%m.%Y") if outcome.subscription_end else "—"
+        )
+        await bot.send_message(
+            user.telegram_id,
+            "🎉 Оплату успішно проведено! Ви отримали доступ до спільноти.\n\n"
+            f"🔗 Посилання для вступу: {invite_link}\n\n"
+            f"Підписка діє до {end_text}, після чого відбудеться автоматичне продовження. "
+            "Скасувати автопродовження можна командою /cancel_subscription.",
+        )
 
     # Monobank requires exactly a plain 200 OK to consider the webhook delivered,
     # otherwise it retries up to 3 times -- no signed acknowledgement body needed.

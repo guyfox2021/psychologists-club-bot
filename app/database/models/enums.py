@@ -45,6 +45,7 @@ class NotificationType(str, enum.Enum):
     ACCESS_RESTORED = "access_restored"
     APPLICATION_STATUS = "application_status"
     BROADCAST = "broadcast"
+    SUBSCRIPTION_ENDED = "subscription_ended"
 
 
 class NotificationStatus(str, enum.Enum):

@@ -1,7 +1,7 @@
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +12,6 @@ from app.database.repositories import (
     PaymentTokenRepository,
     SettingsRepository,
     SubscriptionRepository,
-    TrialRepository,
     UserRepository,
 )
 from app.payments.monobank_client import MonobankClient, MonobankError
@@ -21,20 +20,25 @@ from app.utils.datetime_utils import add_days
 
 logger = logging.getLogger(__name__)
 
+_FIRST_CHARGE_RETRY_DAYS = 1
+
 
 @dataclass(frozen=True)
 class AuthorizationOutcome:
-    success: bool
+    verified: bool
+    charged: bool = False
     user_id: int | None = None
-    trial_end: datetime | None = None
+    subscription_end: datetime | None = None
 
 
 class PaymentService:
     """Talks to Monobank Acquiring and persists Payment/PaymentToken rows.
 
-    Subscription/trial *lifecycle* decisions triggered by our own scheduler
-    (trial expiry, renewal retries, cancellation) live in the subscription
-    service instead -- this service only records what Monobank told us.
+    Subscription lifecycle decisions triggered by our own scheduler (renewal
+    retries, cancellation) live in the subscription service instead -- this
+    service only records what Monobank told us. The one exception is the very
+    first charge: there's no trial period, so it happens synchronously right
+    after card verification, in `handle_authorization_result` below.
     """
 
     def __init__(self, session: AsyncSession, client: MonobankClient) -> None:
@@ -43,7 +47,6 @@ class PaymentService:
         self._payment_repo = PaymentRepository(session)
         self._token_repo = PaymentTokenRepository(session)
         self._subscription_repo = SubscriptionRepository(session)
-        self._trial_repo = TrialRepository(session)
         self._settings_repo = SettingsRepository(session)
         self._user_repo = UserRepository(session)
 
@@ -78,22 +81,27 @@ class PaymentService:
     async def handle_authorization_result(
         self, callback: MonobankInvoiceStatus
     ) -> AuthorizationOutcome:
-        """Process the webhook fired after the user completes the hosted invoice."""
+        """Process the webhook fired after the user completes the hosted invoice.
+
+        No trial period: once the card is verified, we charge it immediately
+        (right here, not waiting for the daily scheduler) and grant access
+        only if that charge actually succeeds.
+        """
         if callback.invoice_id is None:
             logger.warning("Monobank webhook payload is missing invoiceId")
-            return AuthorizationOutcome(success=False)
+            return AuthorizationOutcome(verified=False)
 
         payment = await self._payment_repo.get_by_order_reference(callback.invoice_id)
         if payment is None:
             logger.warning("Unknown invoiceId in Monobank callback: %s", callback.invoice_id)
-            return AuthorizationOutcome(success=False)
+            return AuthorizationOutcome(verified=False)
 
         if not callback.is_success:
             if callback.is_final_failure:
                 await self._payment_repo.update_status(
                     callback.invoice_id, PaymentStatus.FAILED, raw_response=callback.model_dump()
                 )
-            return AuthorizationOutcome(success=False, user_id=payment.user_id)
+            return AuthorizationOutcome(verified=False, user_id=payment.user_id)
 
         await self._payment_repo.update_status(
             callback.invoice_id, PaymentStatus.SUCCESS, raw_response=callback.model_dump()
@@ -101,31 +109,57 @@ class PaymentService:
 
         card_token = callback.wallet_data.card_token if callback.wallet_data else None
         card_mask = callback.payment_info.masked_pan if callback.payment_info else None
-        if card_token:
-            now = datetime.now(UTC)
-            await self._token_repo.deactivate_all_for_user(payment.user_id, now)
-            await self._token_repo.create(
-                user_id=payment.user_id,
-                rec_token=card_token,
-                card_mask=card_mask,
-                provider="monobank",
+        if not card_token:
+            logger.warning(
+                "Monobank verification succeeded but no card_token in callback for user %s",
+                payment.user_id,
+            )
+            return AuthorizationOutcome(verified=True, charged=False, user_id=payment.user_id)
+
+        now = datetime.now(UTC)
+        await self._token_repo.deactivate_all_for_user(payment.user_id, now)
+        await self._token_repo.create(
+            user_id=payment.user_id,
+            rec_token=card_token,
+            card_mask=card_mask,
+            provider="monobank",
+        )
+        await self._subscription_repo.get_or_create(payment.user_id)
+
+        try:
+            charge_response = await self.charge_subscription(
+                payment.user_id, PaymentTransactionType.TRIAL_CHARGE
+            )
+        except MonobankError:
+            logger.exception("Immediate post-verification charge failed for user %s", payment.user_id)
+            charge_response = None
+
+        if charge_response is not None and charge_response.is_success:
+            bot_settings = await self._settings_repo.get_or_create()
+            subscription_end = add_days(now, bot_settings.subscription_duration_days)
+            await self._subscription_repo.update(
+                payment.user_id,
+                status=SubscriptionStatus.ACTIVE,
+                subscription_start=now,
+                subscription_end=subscription_end,
+                next_charge_at=subscription_end,
+                retry_count=0,
+            )
+            return AuthorizationOutcome(
+                verified=True, charged=True, user_id=payment.user_id, subscription_end=subscription_end
             )
 
-        bot_settings = await self._settings_repo.get_or_create()
-        trial_start = datetime.now(UTC)
-        trial_end = add_days(trial_start, bot_settings.trial_days)
-
-        await self._trial_repo.create(payment.user_id, trial_start, trial_end)
-        await self._subscription_repo.get_or_create(payment.user_id)
+        # Card verified but the immediate charge failed (insufficient funds, etc) --
+        # mark it the same way a failed renewal would be, so the existing daily
+        # retry job (SubscriptionService/list_due_for_charge) keeps trying without
+        # needing separate retry logic here.
         await self._subscription_repo.update(
             payment.user_id,
-            status=SubscriptionStatus.TRIAL,
-            trial_end=trial_end,
-            next_charge_at=trial_end,
-            retry_count=0,
+            status=SubscriptionStatus.FAILED,
+            retry_count=1,
+            next_charge_at=now + timedelta(days=_FIRST_CHARGE_RETRY_DAYS),
         )
-
-        return AuthorizationOutcome(success=True, user_id=payment.user_id, trial_end=trial_end)
+        return AuthorizationOutcome(verified=True, charged=False, user_id=payment.user_id)
 
     async def charge_subscription(
         self, user_id: int, transaction_type: PaymentTransactionType

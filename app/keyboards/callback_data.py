@@ -14,4 +14,4 @@ class DocumentsCB(CallbackData, prefix="docs"):
 
 
 class PaymentCB(CallbackData, prefix="pay"):
-    action: str  # confirm
+    action: str  # confirm | retry_later | cancel_confirm | cancel_abort
